@@ -1,0 +1,100 @@
+-- SmartAttend MySQL 8 schema. The Flask application can create the same schema
+-- through SQLAlchemy; use this script when provisioning MySQL manually.
+CREATE DATABASE IF NOT EXISTS smartattend CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smartattend;
+
+CREATE TABLE users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(30) NOT NULL DEFAULT 'employee',
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX ix_users_role (role)
+);
+CREATE TABLE departments (
+  id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL UNIQUE, code VARCHAR(20) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE designations (
+  id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(120) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE shifts (
+  id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, start_time TIME NOT NULL, end_time TIME NOT NULL,
+  grace_minutes INT NOT NULL DEFAULT 10, full_day_minutes INT NOT NULL DEFAULT 480, half_day_minutes INT NOT NULL DEFAULT 240,
+  overtime_after_minutes INT NOT NULL DEFAULT 480,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE employees (
+  id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL UNIQUE, employee_code VARCHAR(30) NOT NULL UNIQUE,
+  first_name VARCHAR(100) NOT NULL, last_name VARCHAR(100) NOT NULL, phone VARCHAR(30), join_date DATE NOT NULL,
+  department_id INT NULL, designation_id INT NULL, shift_id INT NULL, manager_id INT NULL, biometric_consent_at DATETIME NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_employee_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_employee_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_employee_designation FOREIGN KEY (designation_id) REFERENCES designations(id) ON DELETE SET NULL,
+  CONSTRAINT fk_employee_shift FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL,
+  CONSTRAINT fk_employee_manager FOREIGN KEY (manager_id) REFERENCES employees(id) ON DELETE SET NULL
+);
+CREATE TABLE attendance (
+  id INT AUTO_INCREMENT PRIMARY KEY, employee_id INT NOT NULL, attendance_date DATE NOT NULL,
+  check_in_at DATETIME NULL, check_out_at DATETIME NULL, status VARCHAR(20) NOT NULL DEFAULT 'present',
+  check_in_method VARCHAR(30), check_out_method VARCHAR(30), late_minutes INT NOT NULL DEFAULT 0,
+  work_minutes INT NOT NULL DEFAULT 0, break_minutes INT NOT NULL DEFAULT 0, overtime_minutes INT NOT NULL DEFAULT 0,
+  remarks VARCHAR(500), verified BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_attendance_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+  CONSTRAINT uq_attendance_employee_date UNIQUE (employee_id, attendance_date), INDEX ix_attendance_date_status (attendance_date, status)
+);
+CREATE TABLE leave_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY, employee_id INT NOT NULL, leave_type VARCHAR(30) NOT NULL,
+  start_date DATE NOT NULL, end_date DATE NOT NULL, reason VARCHAR(1000) NOT NULL, document_path VARCHAR(500),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending', reviewed_by_id INT NULL, reviewed_at DATETIME NULL, reviewer_note VARCHAR(500),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT ck_leave_dates CHECK (end_date >= start_date),
+  CONSTRAINT fk_leave_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+  CONSTRAINT fk_leave_reviewer FOREIGN KEY (reviewed_by_id) REFERENCES users(id) ON DELETE SET NULL, INDEX ix_leave_status (status)
+);
+CREATE TABLE leave_balances (
+  id INT AUTO_INCREMENT PRIMARY KEY, employee_id INT NOT NULL, leave_type VARCHAR(30) NOT NULL, year INT NOT NULL,
+  allocated_days DECIMAL(5,1) NOT NULL DEFAULT 0, used_days DECIMAL(5,1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT uq_leave_balance UNIQUE (employee_id, leave_type, year),
+  CONSTRAINT fk_balance_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+);
+CREATE TABLE holidays (
+  id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(200) NOT NULL, holiday_date DATE NOT NULL UNIQUE, optional BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE face_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY, employee_id INT NOT NULL, encrypted_embedding LONGBLOB NOT NULL,
+  algorithm_version VARCHAR(50) NOT NULL, active BOOLEAN NOT NULL DEFAULT TRUE, consent_version VARCHAR(30) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_template_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE, INDEX ix_template_employee (employee_id)
+);
+CREATE TABLE attendance_corrections (
+  id INT AUTO_INCREMENT PRIMARY KEY, attendance_id INT NULL, requested_by_id INT NOT NULL, reason VARCHAR(1000) NOT NULL,
+  requested_check_in DATETIME NULL, requested_check_out DATETIME NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending', reviewed_by_id INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_correction_attendance FOREIGN KEY (attendance_id) REFERENCES attendance(id) ON DELETE CASCADE,
+  CONSTRAINT fk_correction_requester FOREIGN KEY (requested_by_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_correction_reviewer FOREIGN KEY (reviewed_by_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE TABLE notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(160) NOT NULL, body VARCHAR(500) NOT NULL, read_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_notification_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, INDEX ix_notification_user (user_id)
+);
+CREATE TABLE audit_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NULL, action VARCHAR(100) NOT NULL, entity_type VARCHAR(100) NOT NULL,
+  entity_id VARCHAR(100), details JSON, ip_address VARCHAR(64), created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL, INDEX ix_audit_created (created_at)
+);
+CREATE TABLE password_reset_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, token_hash VARCHAR(128) NOT NULL UNIQUE, expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, INDEX ix_reset_expires (expires_at)
+);

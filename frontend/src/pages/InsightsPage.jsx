@@ -1,0 +1,11 @@
+import { AlertTriangle, BarChart3, BrainCircuit, Info } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import api, { readableError } from '../services/api'
+
+export default function InsightsPage() {
+  const [data, setData] = useState(null); const [error, setError] = useState('')
+  useEffect(() => { api.get('/insights').then(({ data }) => setData(data)).catch((error) => setError(readableError(error))) }, [])
+  if (error) return <div className="alert error">{error}</div>
+  if (!data) return <div className="page-loader">Building insights from attendance history…</div>
+  return <><section className="page-title"><div><p className="eyebrow">EXPLAINABLE ANALYTICS</p><h1>AI attendance insights</h1><p>Signals to help HR investigate patterns, never automated decisions.</p></div></section><div className="insight-note"><Info size={19} /> {data.label}</div><section className="insights-grid"><article className="panel"><div className="panel-title"><div><h2><BrainCircuit size={20} /> Potential irregularities</h2><p>Transparent risk signals from the last 90 days</p></div></div><div className="signal-list">{data.employeePredictions.map((item) => <article key={item.employeeId}><span className="warning-icon"><AlertTriangle size={18} /></span><div><b>{item.employee}</b><p>{item.explanation}</p></div><strong>{Math.round(item.riskScore * 100)}%<small>signal</small></strong></article>)}{!data.employeePredictions.length && <p className="muted">Not enough recurring attendance signals to highlight.</p>}</div></article><article className="panel"><div className="panel-title"><div><h2><BarChart3 size={20} /> Department actuals</h2><p>Recorded attendance—not a prediction</p></div></div><div className="department-list">{data.departmentActuals.map((item) => <div key={item.department}><div><b>{item.department}</b><span>{item.recordedDays} recorded days</span></div><div className="rate"><i style={{ width: `${item.presentRate * 100}%` }} /><b>{Math.round(item.presentRate * 100)}%</b></div><small>{Math.round(item.lateArrivalRate * 100)}% late-arrival rate</small></div>)}{!data.departmentActuals.length && <p className="muted">No historical attendance has been recorded yet.</p>}</div></article></section></>
+}
