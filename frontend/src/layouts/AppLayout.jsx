@@ -1,4 +1,4 @@
-import { BarChart3, Bot, CalendarDays, ClipboardCheck, FileBarChart, LayoutDashboard, LogOut, Menu, Moon, Sun, Users, X } from 'lucide-react'
+import { BarChart3, Bot, CalendarDays, ClipboardCheck, FileBarChart, LayoutDashboard, LogOut, Menu, Moon, Settings, Sun, Users, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import ChatPanel from '../components/ChatPanel'
@@ -9,6 +9,7 @@ const navigation = [
   { to: '/attendance', label: 'My attendance', icon: ClipboardCheck },
   { to: '/leaves', label: 'Leave centre', icon: CalendarDays },
   { to: '/reports', label: 'Reports', icon: FileBarChart },
+  { to: '/profile', label: 'Profile & support', icon: Settings },
 ]
 
 export default function AppLayout() {

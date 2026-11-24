@@ -96,6 +96,35 @@ def update_employee(employee_id):
     return jsonify({"employee": employee.to_dict()})
 
 
+@employees_bp.patch("/employees/me")
+@roles_required(Role.SUPER_ADMIN.value, Role.HR_ADMIN.value, Role.EMPLOYEE.value)
+def update_my_profile():
+    """Let every signed-in user maintain their own basic contact profile."""
+    employee = current_employee()
+    if not employee:
+        return jsonify({"error": "Employee profile not found."}), 404
+    data, error = payload()
+    if error:
+        return error
+    for api_name, model_name in {"firstName": "first_name", "lastName": "last_name", "phone": "phone"}.items():
+        if api_name in data:
+            value = data[api_name].strip() if isinstance(data[api_name], str) else data[api_name]
+            if api_name in {"firstName", "lastName"} and not value:
+                return jsonify({"error": f"{api_name} cannot be empty."}), 400
+            setattr(employee, model_name, value)
+    if "email" in data:
+        email = data["email"].strip().lower()
+        if not email:
+            return jsonify({"error": "email cannot be empty."}), 400
+        conflict = User.query.filter(User.email == email, User.id != employee.user_id).first()
+        if conflict:
+            return jsonify({"error": "Email already exists."}), 409
+        employee.user.email = email
+    add_audit_log(current_user().id, "profile_updated", "employee", employee.id, {"fields": list(data)}, request.remote_addr)
+    db.session.commit()
+    return jsonify({"employee": employee.to_dict(), "user": employee.user.to_dict()})
+
+
 @employees_bp.delete("/employees/<int:employee_id>")
 @roles_required(Role.SUPER_ADMIN.value)
 def deactivate_employee(employee_id):
