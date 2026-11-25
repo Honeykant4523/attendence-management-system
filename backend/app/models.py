@@ -235,7 +235,9 @@ class FaceTemplate(TimestampMixin, db.Model):
 class AttendanceCorrection(TimestampMixin, db.Model):
     __tablename__ = "attendance_corrections"
     id = db.Column(db.Integer, primary_key=True)
-    attendance_id = db.Column(db.Integer, db.ForeignKey("attendance.id", ondelete="CASCADE"), nullable=False)
+    # A check-in request may be made before an attendance record exists. The reviewer
+    # attaches the record only when the request is approved.
+    attendance_id = db.Column(db.Integer, db.ForeignKey("attendance.id", ondelete="CASCADE"), nullable=True)
     requested_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     reason = db.Column(db.String(1000), nullable=False)
     requested_check_in = db.Column(db.DateTime)

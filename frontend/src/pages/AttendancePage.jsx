@@ -17,7 +17,31 @@ export default function AttendancePage() {
 function FaceCard({ hasConsent, onConsent, onDone, onError }) {
   const video = useRef(null); const stream = useRef(null); const [active, setActive] = useState(false); const [busy, setBusy] = useState(false); const [enrolled, setEnrolled] = useState(false)
   useEffect(() => () => stream.current?.getTracks().forEach((track) => track.stop()), [])
-  const openCamera = async () => { try { stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); video.current.srcObject = stream.current; setActive(true) } catch { onError('Camera access was denied or unavailable. Use the authorized manual fallback.') } }
+  const openCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      onError('This browser does not support camera access. Use a current version of Chrome or Edge.')
+      return
+    }
+    try {
+      // Prefer a front-facing camera when the device exposes that information.
+      // External USB webcams often do not, so fall back to any available camera.
+      try {
+        stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'user' } }, audio: false })
+      } catch {
+        stream.current = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      }
+      video.current.srcObject = stream.current
+      await video.current.play()
+      setActive(true)
+    } catch (err) {
+      const reason = err?.name === 'NotReadableError'
+        ? 'The camera is busy in another application. Close Camera, Zoom, Teams, or WhatsApp and try again.'
+        : err?.name === 'NotAllowedError'
+          ? 'Camera permission was blocked. Allow camera access for localhost:5173 in your browser settings, then refresh.'
+          : 'Camera access could not be started. Check that the selected webcam is available, then try again.'
+      onError(reason)
+    }
+  }
   const capture = () => { const canvas = document.createElement('canvas'); canvas.width = video.current.videoWidth; canvas.height = video.current.videoHeight; canvas.getContext('2d').drawImage(video.current, 0, 0); return canvas.toDataURL('image/jpeg', .9) }
   const frames = async () => { const values = []; for (let i = 0; i < 3; i += 1) { values.push(capture()); if (i < 2) await new Promise((resolve) => setTimeout(resolve, 750)) } return values }
   const enrol = async () => { if (!active) return openCamera(); setBusy(true); try { await api.post('/biometrics/enrol', { image: capture(), consentVersion: 'v1' }); setEnrolled(true) } catch (err) { onError(readableError(err)) } finally { setBusy(false) } }
