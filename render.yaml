@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: smartattend-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 1 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FACE_RECOGNITION_ENABLED
+        value: "false"
+      - key: AUTO_APPROVE_MANUAL_ATTENDANCE
+        value: "false"
