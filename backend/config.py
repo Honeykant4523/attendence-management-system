@@ -24,3 +24,4 @@ class Config:
     CORS_ORIGINS = [item.strip() for item in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")]
     BIOMETRIC_ENCRYPTION_KEY = os.getenv("BIOMETRIC_ENCRYPTION_KEY", "")
     FACE_RECOGNITION_ENABLED = os.getenv("FACE_RECOGNITION_ENABLED", "false").lower() == "true"
+    AUTO_APPROVE_MANUAL_ATTENDANCE = os.getenv("AUTO_APPROVE_MANUAL_ATTENDANCE", "false").lower() == "true"

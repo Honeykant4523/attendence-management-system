@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import and_
 
 from ..extensions import db
@@ -90,7 +90,25 @@ def manual_attendance_request():
                                       reason=data["reason"].strip(), requested_check_in=at if data.get("kind", "check_in") == "check_in" else None,
                                       requested_check_out=at if data.get("kind") == "check_out" else None)
     db.session.add(correction)
-    add_audit_log(current_user().id, "manual_attendance_requested", "attendance_correction", None, {"kind": data.get("kind", "check_in")}, request.remote_addr)
+    kind = data.get("kind", "check_in")
+    if current_app.config["AUTO_APPROVE_MANUAL_ATTENDANCE"]:
+        try:
+            record = (check_in(employee, at, "manual_auto_approved", True, correction.reason)
+                      if kind == "check_in" else check_out(employee, at, "manual_auto_approved"))
+            db.session.flush()
+            correction.attendance_id = record.id
+            correction.status = "approved"
+            # The requester is recorded as the actor because no separate reviewer was involved.
+            correction.reviewed_by_id = current_user().id
+            add_audit_log(current_user().id, "manual_attendance_auto_approved", "attendance_correction", correction.id,
+                          {"kind": kind}, request.remote_addr)
+            db.session.commit()
+            return jsonify({"message": "Attendance recorded automatically.", "requestId": correction.id,
+                            "attendance": record.to_dict()}), 201
+        except ValueError as err:
+            db.session.rollback()
+            return jsonify({"error": str(err)}), 400
+    add_audit_log(current_user().id, "manual_attendance_requested", "attendance_correction", None, {"kind": kind}, request.remote_addr)
     db.session.commit()
     return jsonify({"message": "Manual attendance request submitted for HR authorization.", "requestId": correction.id}), 202
 
